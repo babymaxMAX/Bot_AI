@@ -5,7 +5,6 @@ import pathlib
 
 class BusinessRules:
     def __init__(self) -> None:
-        # промпт лежит в корне в папке system_prompts
         self._base = pathlib.Path(__file__).parent.parent / "system_prompts"
         self._prompt_file = self._base / "dating_ru.txt"
 
