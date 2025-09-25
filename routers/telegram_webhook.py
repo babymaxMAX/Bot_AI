@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from fastapi import APIRouter, Request, Response, HTTPException
 from aiogram.types import Update
 
@@ -17,5 +18,9 @@ async def telegram_webhook(request: Request) -> Response:
 
     data = await request.json()
     update = Update.model_validate(data)
-    await request.app.state.dp.feed_update(bot=request.app.state.bot, update=update)
+
+    # Отдаём 200 мгновенно, апдейт обрабатываем в фоне (чтобы не упираться в таймауты Telegram/OpenAI)
+    asyncio.create_task(
+        request.app.state.dp.feed_update(bot=request.app.state.bot, update=update)
+    )
     return Response(status_code=200)
