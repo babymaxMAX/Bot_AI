@@ -4,7 +4,7 @@ from aiogram import Router, F
 from aiogram.types import Message
 
 from storage.dialogue_store import DialogueStore
-from ai.client import AIClient
+from client import AIClient
 from services.business_rules import BusinessRules
 from storage.match_store import MatchStore
 
@@ -21,7 +21,6 @@ def create_router(
     async def on_message(message: Message) -> None:
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
 
-        # Гейтинг для мужчины при взаимной симпатии без оплаты
         latest = await match_store.get_latest_match_for_user(user_id)
         if latest and latest["male_id"] == user_id and int(latest.get("mutual", 0)) == 1 and int(
             latest.get("paid", 0)
