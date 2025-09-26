@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI
 from aiogram import Bot, Dispatcher
 
-from app.config import get_settings, WEBHOOK
-from app.storage.dialogue_store import DialogueStore
-from app.storage.match_store import MatchStore
-from app.ai.client import AIClient
-from app.services.business_rules import BusinessRules
-from app.routers.telegram import telegram_router
-from app.routers.sympathy import sympathy_router
-from app.routers.test_ai import test_ai_router
-from app.routers.payments import payments_router
+from config import get_settings, WEBHOOK
+from storage.dialogue_store import DialogueStore
+from storage.match_store import MatchStore
+from client import AIClient
+from services.business_rules import BusinessRules
+from routers.telegram_webhook import telegram_router as telegram_webhook_router
+from routers.sympathy import sympathy_router
+from routers.test_ai import test_ai_router
+from routers.payments import payments_router
 
 
 class AppState:
@@ -43,12 +42,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
 
-    # Attach router with dependencies
-    from app.telegram.router import create_router
-
+    # aiogram-обработчики (чат-логика)
+    from routers.telegram import create_router
     dp.include_router(create_router(dialogue_store, ai_client, rules))
 
-    # Provide stores to bot context for handlers
+    # контекст для обработчиков
     bot["match_store"] = match_store
 
     app.state.bot = bot
@@ -58,7 +56,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.rules = rules
     app.state.match_store = match_store
 
-    # Setup webhook if URL provided
+    # установка вебхука (если задан URL)
     if settings.TELEGRAM_WEBHOOK_URL:
         await bot.set_webhook(
             url=settings.TELEGRAM_WEBHOOK_URL + WEBHOOK.path,
@@ -82,8 +80,8 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Routers
-app.include_router(telegram_router)
+# FastAPI-роуты
+app.include_router(telegram_webhook_router)
 app.include_router(sympathy_router)
 app.include_router(test_ai_router)
 app.include_router(payments_router)
