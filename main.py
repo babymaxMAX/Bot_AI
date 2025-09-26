@@ -1,21 +1,30 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI
 from aiogram import Bot, Dispatcher
 
-from config import get_settings, WEBHOOK
-from storage.dialogue_store import DialogueStore
-from storage.match_store import MatchStore
-from client import AIClient
-from services.business_rules import BusinessRules
-from routers.telegram import create_router
-from routers.sympathy import sympathy_router
-from routers.test_ai import test_ai_router
-from routers.payments import payments_router
-from routers.telegram_webhook import telegram_webhook_router
+from app.config import get_settings, WEBHOOK
+from app.storage.dialogue_store import DialogueStore
+from app.storage.match_store import MatchStore
+from app.ai.client import AIClient
+from app.services.business_rules import BusinessRules
+from app.routers.telegram import telegram_router
+from app.routers.sympathy import sympathy_router
+from app.routers.test_ai import test_ai_router
+from app.routers.payments import payments_router
+
+
+class AppState:
+    bot: Bot
+    dp: Dispatcher
+    dialogue_store: DialogueStore
+    match_store: MatchStore
+    ai_client: AIClient
+    rules: BusinessRules
 
 
 @asynccontextmanager
@@ -33,15 +42,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
-    dp.include_router(create_router(dialogue_store, ai_client, rules, match_store))
+
+    # Attach router with dependencies
+    from app.telegram.router import create_router
+
+    dp.include_router(create_router(dialogue_store, ai_client, rules))
+
+    # Provide stores to bot context for handlers
+    bot["match_store"] = match_store
 
     app.state.bot = bot
     app.state.dp = dp
     app.state.dialogue_store = dialogue_store
-    app.state.match_store = match_store
     app.state.ai_client = ai_client
     app.state.rules = rules
+    app.state.match_store = match_store
 
+    # Setup webhook if URL provided
     if settings.TELEGRAM_WEBHOOK_URL:
         await bot.set_webhook(
             url=settings.TELEGRAM_WEBHOOK_URL + WEBHOOK.path,
@@ -65,7 +82,8 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-app.include_router(telegram_webhook_router)
+# Routers
+app.include_router(telegram_router)
 app.include_router(sympathy_router)
 app.include_router(test_ai_router)
 app.include_router(payments_router)
