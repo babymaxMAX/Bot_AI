@@ -18,6 +18,6 @@ async def telegram_webhook(request: Request) -> Response:
 
     data = await request.json()
     update = Update.model_validate(data)
-    # мгновенный ответ 200, обработка в фоне
+    # мгновенный ответ 200 OK, обработка в фоне
     asyncio.create_task(request.app.state.dp.feed_update(bot=request.app.state.bot, update=update))
     return Response(status_code=200)
