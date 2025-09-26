@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
 
-    # aiogram-обработчики (чат-логика)
+    # aiogram-обработчики (чат)
     from routers.telegram import create_router
     dp.include_router(create_router(dialogue_store, ai_client, rules))
 
@@ -56,7 +56,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.rules = rules
     app.state.match_store = match_store
 
+    # установка вебхука (если задан URL)
     if settings.TELEGRAM_WEBHOOK_URL:
         await bot.set_webhook(
             url=settings.TELEGRAM_WEBHOOK_URL + WEBHOOK.path,
-            secret_token
+            secret_token=settings.TELEGRAM_WEBHOOK_SECRET,
+            drop_pending_updates=True,
+        )
+
+    try:
+        yield
+    finally:
+        await bot.delete_webhook(drop_pending_updates=False)
+        await bot.session.close()
+        await dialogue_store.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+# FastAPI-роуты
+app.include_router(telegram_webhook.telegram_router)
+app.include_router(sympathy_router)
+app.include_router(test_ai_router)
+app.include_router(payments_router)
