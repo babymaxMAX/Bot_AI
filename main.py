@@ -11,7 +11,7 @@ from storage.dialogue_store import DialogueStore
 from storage.match_store import MatchStore
 from client import AIClient
 from services.business_rules import BusinessRules
-from routers.telegram_webhook import telegram_router as telegram_webhook_router
+import routers.telegram_webhook as telegram_webhook
 from routers.sympathy import sympathy_router
 from routers.test_ai import test_ai_router
 from routers.payments import payments_router
@@ -56,32 +56,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.rules = rules
     app.state.match_store = match_store
 
-    # установка вебхука (если задан URL)
     if settings.TELEGRAM_WEBHOOK_URL:
         await bot.set_webhook(
             url=settings.TELEGRAM_WEBHOOK_URL + WEBHOOK.path,
-            secret_token=settings.TELEGRAM_WEBHOOK_SECRET,
-            drop_pending_updates=True,
-        )
-
-    try:
-        yield
-    finally:
-        await bot.delete_webhook(drop_pending_updates=False)
-        await bot.session.close()
-        await dialogue_store.close()
-
-
-app = FastAPI(lifespan=lifespan)
-
-
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-# FastAPI-роуты
-app.include_router(telegram_webhook_router)
-app.include_router(sympathy_router)
-app.include_router(test_ai_router)
-app.include_router(payments_router)
+            secret_token
