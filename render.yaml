@@ -1,0 +1,24 @@
+services:
+- type: web
+  name: dating-ai-bot
+  env: python
+  buildCommand: pip install -r requirements.txt
+  startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+  autoDeploy: false
+  envVars:
+  - key: TELEGRAM_BOT_TOKEN
+    sync: false
+  - key: OPENAI_API_KEY
+    sync: false
+  - key: TELEGRAM_WEBHOOK_URL
+    value: https://your-service.onrender.com
+  - key: TELEGRAM_WEBHOOK_SECRET
+    sync: false
+  - key: DIALOGUE_DB_PATH
+    value: /data/dialogues.db
+  - key: MAIN_BOT_AUTH_TOKEN
+    sync: false
+  disks:
+  - name: data
+    mountPath: /data
+    sizeGB: 1
