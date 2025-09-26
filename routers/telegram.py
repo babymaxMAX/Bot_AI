@@ -12,13 +12,12 @@ from storage.match_store import MatchStore
 from config import get_settings
 
 
-def create_router(dialogue_store: DialogueStore, ai_client: AIClient, rules: BusinessRules) -> Router:
+def create_router(dialogue_store: DialogueStore, match_store: MatchStore, ai_client: AIClient, rules: BusinessRules) -> Router:
     router = Router(name="chat")
 
     @router.message(F.text & F.chat.type == "private")
     async def on_message(message: Message) -> None:
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
-        match_store: MatchStore = message.bot.get("match_store")  # type: ignore[assignment]
         latest = await match_store.get_latest_match_for_user(user_id)
         # если пишет мужчина, есть взаимная симпатия и нет оплаты — мягко подсказываем про оплату
         if latest and latest.get("male_id") == user_id and int(latest.get("mutual", 0)) == 1 and int(latest.get("paid", 0)) == 0:
@@ -46,7 +45,6 @@ def create_router(dialogue_store: DialogueStore, ai_client: AIClient, rules: Bus
     @router.message(F.text == "/pay")
     async def on_pay(message: Message) -> None:
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
-        match_store: MatchStore = message.bot.get("match_store")  # type: ignore[assignment]
         latest = await match_store.get_latest_match_for_user(user_id)
         if not latest or latest["male_id"] != user_id or int(latest.get("mutual", 0)) != 1:
             await message.answer("Пока нет активной взаимной симпатии, оплата не требуется.")
@@ -76,7 +74,6 @@ def create_router(dialogue_store: DialogueStore, ai_client: AIClient, rules: Bus
     @router.message(F.text == "/contact")
     async def on_contact(message: Message) -> None:
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
-        match_store: MatchStore = message.bot.get("match_store")  # type: ignore[assignment]
         latest = await match_store.get_latest_match_for_user(user_id)
         if not latest or int(latest.get("mutual", 0)) != 1:
             await message.answer("Пока нет взаимной симпатии, контакт недоступен.")
