@@ -42,12 +42,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
 
-    # aiogram-обработчики (чат)
+    # aiogram-обработчики (чат-логика)
     from routers.telegram import create_router
-    dp.include_router(create_router(dialogue_store, ai_client, rules))
-
-    # контекст для обработчиков
-    bot["match_store"] = match_store
+    dp.include_router(create_router(dialogue_store, match_store, ai_client, rules))
 
     app.state.bot = bot
     app.state.dp = dp
