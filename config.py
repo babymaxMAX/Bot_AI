@@ -8,6 +8,7 @@ import os
 import re
 import pathlib
 
+# грузим .env до чтения настроек
 load_dotenv(dotenv_path=".env")
 
 
@@ -36,24 +37,33 @@ def _normalize_env() -> None:
         os.environ["TELEGRAM_BOT_TOKEN"] = webhook_url_in_file  # type: ignore[arg-type]
 
 
+__all__ = ["get_settings", "WEBHOOK"]
+
 _normalize_env()
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+    )
+    # Telegram
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_WEBHOOK_URL: str | None = None
     TELEGRAM_WEBHOOK_SECRET: str | None = None
 
+    # App
     APP_BASE_URL: str | None = None
     APP_PORT: int = 8000
 
+    # AI
     AI_PROVIDER: str = "openai"
     OPENAI_API_KEY: str | None = None
 
+    # Storage
     DIALOGUE_DB_PATH: str = "./data/dialogues.db"
 
+    # Auth от основного бота
     MAIN_BOT_AUTH_TOKEN: str | None = None
 
 
