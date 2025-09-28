@@ -49,5 +49,4 @@ class DialogueStore:
             (user_id, limit),
         )
         rows: Sequence[tuple[str, str]] = await cur.fetchall()
-        items = list(reversed([{"role": r[0], "content": r[1]} for r in rows]))
-        return items
+        return list(reversed([{"role": r[0], "content": r[1]} for r in rows]))
