@@ -9,38 +9,85 @@ from storage.dialogue_store import DialogueStore
 from client import AIClient
 from services.business_rules import BusinessRules
 from storage.match_store import MatchStore
+from storage.profile_store import ProfileStore
 from config import get_settings
 
 
-def create_router(dialogue_store: DialogueStore, match_store: MatchStore, ai_client: AIClient, rules: BusinessRules) -> Router:
+def _format_profile_context(profile: dict) -> str:
+    items = []
+    username = profile.get("username")
+    gender = profile.get("gender")
+    bio = profile.get("bio")
+    number = profile.get("profile_number")
+    attrs = profile.get("attributes") or {}
+    if username:
+        items.append(f"username=@{username}")
+    if gender:
+        items.append(f"gender={gender}")
+    if number:
+        items.append(f"profile_number={number}")
+    if bio:
+        items.append(f"bio={bio}")
+    if attrs:
+        items.append(f"attributes={attrs}")
+    return "\n".join(items) if items else "нет данных"
+
+
+def _format_match_context(match: dict) -> str:
+    parts = [
+        f"match_id={match.get('id')}",
+        f"male_id={match.get('male_id')}",
+        f"female_id={match.get('female_id')}",
+        f"mutual={match.get('mutual')}",
+        f"paid={match.get('paid')}",
+    ]
+    if match.get("female_username"):
+        parts.append(f"female_username=@{match.get('female_username')}")
+    if match.get("male_username"):
+        parts.append(f"male_username=@{match.get('male_username')}")
+    if match.get("invoice_url"):
+        parts.append(f"invoice={match.get('invoice_url')}")
+    return ", ".join(parts)
+
+
+def create_router(
+    dialogue_store: DialogueStore,
+    match_store: MatchStore,
+    profile_store: ProfileStore,
+    ai_client: AIClient,
+    rules: BusinessRules,
+) -> Router:
     router = Router(name="chat")
 
-    @router.message(F.text & F.chat.type == "private")
-    async def on_message(message: Message) -> None:
+    @router.message(F.text == "/help")
+    async def on_help(message: Message) -> None:
+        await message.answer(
+            "Команды:\n"
+            "/start — начать\n"
+            "/profile — показать мою анкету\n"
+            "/match — статус моего матча\n"
+            "/pay — получить ссылку на оплату (для мужчин при взаимной симпатии)\n"
+            "/contact — получить контакт\n"
+        )
+
+    @router.message(F.text == "/profile")
+    async def on_profile(message: Message) -> None:
+        user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
+        profile = await profile_store.get_profile(user_id)
+        if not profile:
+            await message.answer("Анкета не найдена. Попросите основной бот отправить/обновить анкету.")
+            return
+        ctx = _format_profile_context(profile)
+        await message.answer(f"Профиль:\n{ctx}")
+
+    @router.message(F.text == "/match")
+    async def on_match(message: Message) -> None:
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
         latest = await match_store.get_latest_match_for_user(user_id)
-        # если пишет мужчина, есть взаимная симпатия и нет оплаты — мягко подсказываем про оплату
-        if latest and latest.get("male_id") == user_id and int(latest.get("mutual", 0)) == 1 and int(latest.get("paid", 0)) == 0:
-            invoice_url = latest.get("invoice_url")
-            pay_hint = "Для доступа к странице собеседницы требуется оплата 1000₽."
-            if invoice_url:
-                pay_hint += f" Ссылка на оплату: {invoice_url}"
-            else:
-                pay_hint += " Запросите ссылку командой /pay"
-            await message.answer(pay_hint)
-
-        await dialogue_store.add_message(user_id=user_id, role="user", content=message.text or "")
-
-        system_prompt = await rules.build_system_prompt(user_id=user_id)
-        history = await dialogue_store.get_recent_messages(user_id=user_id, limit=12)
-        reply_text = await ai_client.generate_reply(system_prompt=system_prompt, history=history)
-
-        await message.answer(reply_text)
-        await dialogue_store.add_message(user_id=user_id, role="assistant", content=reply_text)
-
-    @router.message(F.text == "/start")
-    async def on_start(message: Message) -> None:
-        await message.answer("Привет! Я помогу начать диалог и поддерживать общение. Напиши первое сообщение.\nДоступные команды: /pay — получить ссылку на оплату (для мужчин при взаимной симпатии), /contact — получить контакт.")
+        if not latest:
+            await message.answer("Активных совпадений пока нет.")
+            return
+        await message.answer("Статус: " + _format_match_context(latest))
 
     @router.message(F.text == "/pay")
     async def on_pay(message: Message) -> None:
@@ -78,7 +125,6 @@ def create_router(dialogue_store: DialogueStore, match_store: MatchStore, ai_cli
         if not latest or int(latest.get("mutual", 0)) != 1:
             await message.answer("Пока нет взаимной симпатии, контакт недоступен.")
             return
-        # женщина — бесплатно получает контакт мужчины
         if latest.get("female_id") == user_id:
             male_username = latest.get("male_username")
             if male_username:
@@ -86,7 +132,6 @@ def create_router(dialogue_store: DialogueStore, match_store: MatchStore, ai_cli
             else:
                 await message.answer("Аккаунт собеседника пока недоступен. Попробуйте позже.")
             return
-        # мужчина — после оплаты
         if latest.get("male_id") == user_id:
             if int(latest.get("paid", 0)) == 1:
                 female_username = latest.get("female_username")
@@ -97,5 +142,32 @@ def create_router(dialogue_store: DialogueStore, match_store: MatchStore, ai_cli
             else:
                 await message.answer("Чтобы получить контакт собеседницы, необходимо оплатить 1000₽. Используйте команду /pay.")
             return
+
+    @router.message(F.text & F.chat.type == "private")
+    async def on_message(message: Message) -> None:
+        user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
+
+        latest = await match_store.get_latest_match_for_user(user_id)
+        if latest and latest.get("male_id") == user_id and int(latest.get("mutual", 0)) == 1 and int(latest.get("paid", 0)) == 0:
+            invoice_url = latest.get("invoice_url")
+            pay_hint = "Для доступа к странице собеседницы требуется оплата 1000₽."
+            if invoice_url:
+                pay_hint += f" Ссылка на оплату: {invoice_url}"
+            else:
+                pay_hint += " Запросите ссылку командой /pay"
+            await message.answer(pay_hint)
+
+        await dialogue_store.add_message(user_id=user_id, role="user", content=message.text or "")
+
+        profile = await profile_store.get_profile(user_id)
+        profile_ctx = _format_profile_context(profile) if profile else None
+        match_ctx = _format_match_context(latest) if latest else None
+        system_prompt = await rules.build_system_prompt(user_id=user_id, profile_context=profile_ctx, match_context=match_ctx)
+
+        history = await dialogue_store.get_recent_messages(user_id=user_id, limit=12)
+        reply_text = await ai_client.generate_reply(system_prompt=system_prompt, history=history)
+
+        await message.answer(reply_text)
+        await dialogue_store.add_message(user_id=user_id, role="assistant", content=reply_text)
 
     return router
