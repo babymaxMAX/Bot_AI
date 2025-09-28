@@ -5,9 +5,7 @@ from fastapi import APIRouter, Header, HTTPException, Body
 from config import get_settings
 from storage.match_store import MatchStore
 
-
 sympathy_router = APIRouter(prefix="/webhook", tags=["sympathy"])
-
 
 @sympathy_router.post("/sympathy")
 async def sympathy_event(
