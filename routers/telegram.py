@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from aiogram import Router, F
 from aiogram.types import Message
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.context import FSMContext
 import httpx
 from typing import Optional
 
@@ -11,6 +13,14 @@ from services.business_rules import BusinessRules
 from storage.match_store import MatchStore
 from storage.profile_store import ProfileStore
 from config import get_settings
+
+
+class ProfileForm(StatesGroup):
+    ask_gender = State()
+    ask_bio = State()
+    ask_age = State()
+    ask_city = State()
+    ask_hobbies = State()
 
 
 def _format_profile_context(profile: dict) -> str:
@@ -64,11 +74,74 @@ def create_router(
         await message.answer(
             "Команды:\n"
             "/start — начать\n"
+            "/create_profile — создать/обновить анкету\n"
             "/profile — показать мою анкету\n"
             "/match — статус моего матча\n"
             "/pay — получить ссылку на оплату (для мужчин при взаимной симпатии)\n"
             "/contact — получить контакт\n"
+            "/cancel — отменить заполнение анкеты"
         )
+
+    @router.message(F.text == "/create_profile")
+    async def create_profile_start(message: Message, state: FSMContext) -> None:
+        await state.clear()
+        await state.set_state(ProfileForm.ask_gender)
+        await message.answer("Создадим анкету. Укажите ваш пол (male/female):")
+
+    @router.message(ProfileForm.ask_gender, F.text)
+    async def create_profile_gender(message: Message, state: FSMContext) -> None:
+        gender = (message.text or "").strip().lower()
+        if gender not in {"male", "female"}:
+            await message.answer("Укажите пол как 'male' или 'female'.")
+            return
+        await state.update_data(gender=gender)
+        await state.set_state(ProfileForm.ask_bio)
+        await message.answer("Коротко о себе (био):")
+
+    @router.message(ProfileForm.ask_bio, F.text)
+    async def create_profile_bio(message: Message, state: FSMContext) -> None:
+        await state.update_data(bio=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_age)
+        await message.answer("Возраст (число):")
+
+    @router.message(ProfileForm.ask_age, F.text.regexp(r"^\\d{1,3}$"))
+    async def create_profile_age(message: Message, state: FSMContext) -> None:
+        await state.update_data(age=int(message.text))  # type: ignore[arg-type]
+        await state.set_state(ProfileForm.ask_city)
+        await message.answer("Город:")
+
+    @router.message(ProfileForm.ask_age)
+    async def create_profile_age_invalid(message: Message) -> None:
+        await message.answer("Укажите возраст числом, пример: 29")
+
+    @router.message(ProfileForm.ask_city, F.text)
+    async def create_profile_city(message: Message, state: FSMContext) -> None:
+        await state.update_data(city=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_hobbies)
+        await message.answer("Хобби (через запятую):")
+
+    @router.message(ProfileForm.ask_hobbies, F.text)
+    async def create_profile_finish(message: Message, state: FSMContext) -> None:
+        user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
+        data = await state.get_data()
+        hobbies = [h.strip() for h in (message.text or "").split(",") if h.strip()]
+        attrs = {"age": data.get("age"), "city": data.get("city"), "hobbies": hobbies}
+
+        await profile_store.upsert_profile(
+            user_id=user_id,
+            username=message.from_user.username if message.from_user else None,
+            gender=data.get("gender"),
+            bio=data.get("bio"),
+            attributes=attrs,
+            profile_number=None,
+        )
+        await state.clear()
+        await message.answer("Анкета сохранена. Используйте /profile для просмотра.")
+
+    @router.message(F.text == "/cancel")
+    async def on_cancel(message: Message, state: FSMContext) -> None:
+        await state.clear()
+        await message.answer("Ок, отменил. Используйте /create_profile, чтобы начать заново.")
 
     @router.message(F.text == "/profile")
     async def on_profile(message: Message) -> None:
