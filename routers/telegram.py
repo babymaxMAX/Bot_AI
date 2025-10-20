@@ -21,6 +21,27 @@ class ProfileForm(StatesGroup):
     ask_age = State()
     ask_city = State()
     ask_hobbies = State()
+    # Расширенная анкета для знакомств по исламу
+    ask_country = State()
+    ask_citizenship = State()
+    ask_ethnicity = State()
+    ask_languages = State()
+    ask_marital_status = State()
+    ask_children = State()
+    ask_religiosity = State()
+    ask_prayer = State()
+    ask_dress_code = State()  # хиджаб/ниqab для женщин; борода для мужчин
+    ask_education = State()
+    ask_occupation = State()
+    ask_income = State()
+    ask_height = State()
+    ask_body_type = State()
+    ask_smoking = State()
+    ask_alcohol = State()
+    ask_halal_practice = State()
+    ask_family_consent = State()
+    ask_contact_pref = State()
+    ask_expectations = State()
 
 
 def _format_profile_context(profile: dict) -> str:
@@ -110,25 +131,175 @@ def create_router(
     @router.message(ProfileForm.ask_age, F.text.regexp(r"^(1[0-1][0-9]|[1-9]?[0-9])$"))
     async def create_profile_age(message: Message, state: FSMContext) -> None:
         await state.update_data(age=int(message.text))  # type: ignore[arg-type]
-        await state.set_state(ProfileForm.ask_city)
-        await message.answer("Город:")
+        await state.set_state(ProfileForm.ask_country)
+        await message.answer("Страна проживания:")
 
     @router.message(ProfileForm.ask_age)
     async def create_profile_age_invalid(message: Message) -> None:
         await message.answer("Укажите возраст числом, пример: 29")
 
+    @router.message(ProfileForm.ask_country, F.text)
+    async def create_profile_country(message: Message, state: FSMContext) -> None:
+        await state.update_data(country=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_city)
+        await message.answer("Город проживания:")
+
     @router.message(ProfileForm.ask_city, F.text)
     async def create_profile_city(message: Message, state: FSMContext) -> None:
         await state.update_data(city=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_citizenship)
+        await message.answer("Гражданство (если несколько — через запятую, можно 'пропустить'):")
+
+    @router.message(ProfileForm.ask_citizenship, F.text)
+    async def create_profile_citizenship(message: Message, state: FSMContext) -> None:
+        txt = (message.text or "").strip()
+        if txt.lower() != "пропустить":
+            await state.update_data(citizenship=txt)
+        await state.set_state(ProfileForm.ask_ethnicity)
+        await message.answer("Этническое происхождение (например: татарин, дагестанец; можно 'пропустить'):")
+
+    @router.message(ProfileForm.ask_ethnicity, F.text)
+    async def create_profile_ethnicity(message: Message, state: FSMContext) -> None:
+        txt = (message.text or "").strip()
+        if txt.lower() != "пропустить":
+            await state.update_data(ethnicity=txt)
+        await state.set_state(ProfileForm.ask_languages)
+        await message.answer("Языки (через запятую):")
+
+    @router.message(ProfileForm.ask_languages, F.text)
+    async def create_profile_languages(message: Message, state: FSMContext) -> None:
+        langs = [x.strip() for x in (message.text or "").split(",") if x.strip()]
+        await state.update_data(languages=langs)
+        await state.set_state(ProfileForm.ask_marital_status)
+        await message.answer("Семейное положение (холост/незамужем, разведен(а), вдовец/вдова):")
+
+    @router.message(ProfileForm.ask_marital_status, F.text)
+    async def create_profile_marital(message: Message, state: FSMContext) -> None:
+        await state.update_data(marital_status=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_children)
+        await message.answer("Дети (нет / есть, сколько и возраст):")
+
+    @router.message(ProfileForm.ask_children, F.text)
+    async def create_profile_children(message: Message, state: FSMContext) -> None:
+        await state.update_data(children=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_religiosity)
+        await message.answer("Уровень религиозной практики (начальный/средний/высокий):")
+
+    @router.message(ProfileForm.ask_religiosity, F.text)
+    async def create_profile_religiosity(message: Message, state: FSMContext) -> None:
+        await state.update_data(religiosity=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_prayer)
+        await message.answer("Намаз (совершаю регулярно/иногда/нет):")
+
+    @router.message(ProfileForm.ask_prayer, F.text)
+    async def create_profile_prayer(message: Message, state: FSMContext) -> None:
+        await state.update_data(prayer=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_dress_code)
+        await message.answer("Для женщин: хиджаб/ниqab (ношение) — ответ; для мужчин: борода — ответ. Если не применимо — 'пропустить':")
+
+    @router.message(ProfileForm.ask_dress_code, F.text)
+    async def create_profile_dress(message: Message, state: FSMContext) -> None:
+        txt = (message.text or "").strip()
+        if txt.lower() != "пропустить":
+            await state.update_data(dress_code=txt)
+        await state.set_state(ProfileForm.ask_education)
+        await message.answer("Образование (уровень, специальность):")
+
+    @router.message(ProfileForm.ask_education, F.text)
+    async def create_profile_education(message: Message, state: FSMContext) -> None:
+        await state.update_data(education=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_occupation)
+        await message.answer("Род занятий/работа:")
+
+    @router.message(ProfileForm.ask_occupation, F.text)
+    async def create_profile_occupation(message: Message, state: FSMContext) -> None:
+        await state.update_data(occupation=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_income)
+        await message.answer("Доход (диапазон, можно 'пропустить'):")
+
+    @router.message(ProfileForm.ask_income, F.text)
+    async def create_profile_income(message: Message, state: FSMContext) -> None:
+        txt = (message.text or "").strip()
+        if txt.lower() != "пропустить":
+            await state.update_data(income=txt)
+        await state.set_state(ProfileForm.ask_height)
+        await message.answer("Рост (см, число, можно 'пропустить'):")
+
+    @router.message(ProfileForm.ask_height, F.text)
+    async def create_profile_height(message: Message, state: FSMContext) -> None:
+        txt = (message.text or "").strip()
+        if txt.lower() != "пропустить":
+            await state.update_data(height=txt)
+        await state.set_state(ProfileForm.ask_body_type)
+        await message.answer("Телосложение (стройное/среднее/крепкое и т.п., можно 'пропустить'):")
+
+    @router.message(ProfileForm.ask_body_type, F.text)
+    async def create_profile_body(message: Message, state: FSMContext) -> None:
+        txt = (message.text or "").strip()
+        if txt.lower() != "пропустить":
+            await state.update_data(body_type=txt)
+        await state.set_state(ProfileForm.ask_smoking)
+        await message.answer("Курение (нет/иногда/да):")
+
+    @router.message(ProfileForm.ask_smoking, F.text)
+    async def create_profile_smoking(message: Message, state: FSMContext) -> None:
+        await state.update_data(smoking=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_alcohol)
+        await message.answer("Алкоголь (нет/иногда/да):")
+
+    @router.message(ProfileForm.ask_alcohol, F.text)
+    async def create_profile_alcohol(message: Message, state: FSMContext) -> None:
+        await state.update_data(alcohol=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_halal_practice)
+        await message.answer("Соблюдение халяль (строго/в основном/стараюсь):")
+
+    @router.message(ProfileForm.ask_halal_practice, F.text)
+    async def create_profile_halal(message: Message, state: FSMContext) -> None:
+        await state.update_data(halal=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_family_consent)
+        await message.answer("Согласие семьи/вали известно? (да/нет/обсуждается):")
+
+    @router.message(ProfileForm.ask_family_consent, F.text)
+    async def create_profile_consent(message: Message, state: FSMContext) -> None:
+        await state.update_data(family_consent=(message.text or "").strip())
+        await state.set_state(ProfileForm.ask_contact_pref)
+        await message.answer("Предпочтительный способ связи (чат/звонок/через вали/опекуна):")
+
+    @router.message(ProfileForm.ask_contact_pref, F.text)
+    async def create_profile_contactpref(message: Message, state: FSMContext) -> None:
+        await state.update_data(contact_pref=(message.text or "").strip())
         await state.set_state(ProfileForm.ask_hobbies)
-        await message.answer("Хобби (через запятую):")
+        await message.answer("Хобби и интересы (через запятую):")
 
     @router.message(ProfileForm.ask_hobbies, F.text)
     async def create_profile_finish(message: Message, state: FSMContext) -> None:
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
         data = await state.get_data()
         hobbies = [h.strip() for h in (message.text or "").split(",") if h.strip()]
-        attrs = {"age": data.get("age"), "city": data.get("city"), "hobbies": hobbies}
+        attrs = {
+            "age": data.get("age"),
+            "country": data.get("country"),
+            "city": data.get("city"),
+            "citizenship": data.get("citizenship"),
+            "ethnicity": data.get("ethnicity"),
+            "languages": data.get("languages"),
+            "marital_status": data.get("marital_status"),
+            "children": data.get("children"),
+            "religiosity": data.get("religiosity"),
+            "prayer": data.get("prayer"),
+            "dress_code": data.get("dress_code"),
+            "education": data.get("education"),
+            "occupation": data.get("occupation"),
+            "income": data.get("income"),
+            "height": data.get("height"),
+            "body_type": data.get("body_type"),
+            "smoking": data.get("smoking"),
+            "alcohol": data.get("alcohol"),
+            "halal": data.get("halal"),
+            "family_consent": data.get("family_consent"),
+            "contact_pref": data.get("contact_pref"),
+            "hobbies": hobbies,
+        }
 
         await profile_store.upsert_profile(
             user_id=user_id,
@@ -163,7 +334,19 @@ def create_router(
             f"Пол: {'Мужчина' if data.get('gender')=='male' else 'Женщина'}",
             f"О себе: {data.get('bio')}",
             f"Возраст: {attrs.get('age')}",
-            f"Город: {attrs.get('city')}",
+            f"Страна/Город: {attrs.get('country')} / {attrs.get('city')}",
+            f"Гражданство: {attrs.get('citizenship')}",
+            f"Этнос: {attrs.get('ethnicity')}",
+            f"Языки: {', '.join(attrs.get('languages') or [])}",
+            f"Сем. положение: {attrs.get('marital_status')} | Дети: {attrs.get('children')}",
+            f"Религиозность: {attrs.get('religiosity')} | Намаз: {attrs.get('prayer')}",
+            f"Одежда/борода: {attrs.get('dress_code')}",
+            f"Образование: {attrs.get('education')}",
+            f"Занятость: {attrs.get('occupation')} | Доход: {attrs.get('income')}",
+            f"Рост/телосложение: {attrs.get('height')} / {attrs.get('body_type')}",
+            f"Курение/алкоголь: {attrs.get('smoking')} / {attrs.get('alcohol')}",
+            f"Халяль: {attrs.get('halal')} | Согласие семьи: {attrs.get('family_consent')}",
+            f"Связь: {attrs.get('contact_pref')}",
             f"Хобби: {', '.join(attrs.get('hobbies') or [])}",
         ]
         await message.answer("\n".join(preview) + "\nИспользуйте /profile для просмотра или /my_matches для статуса совпадений.")
