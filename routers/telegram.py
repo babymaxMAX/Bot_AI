@@ -93,12 +93,10 @@ def create_router(
         await state.set_state(ProfileForm.ask_gender)
         await message.answer("Создадим анкету. Укажите ваш пол (male/female):")
 
-    @router.message(ProfileForm.ask_gender, F.text)
+    @router.message(ProfileForm.ask_gender, F.text.lower().in_("male", "female", "мужчина", "женщина"))
     async def create_profile_gender(message: Message, state: FSMContext) -> None:
-        gender = (message.text or "").strip().lower()
-        if gender not in {"male", "female"}:
-            await message.answer("Укажите пол как 'male' или 'female'.")
-            return
+        txt = (message.text or "").strip().lower()
+        gender = "male" if txt in {"male", "мужчина"} else "female"
         await state.update_data(gender=gender)
         await state.set_state(ProfileForm.ask_bio)
         await message.answer("Коротко о себе (био):")
@@ -109,7 +107,7 @@ def create_router(
         await state.set_state(ProfileForm.ask_age)
         await message.answer("Возраст (число):")
 
-    @router.message(ProfileForm.ask_age, F.text.regexp(r"^\\d{1,3}$"))
+    @router.message(ProfileForm.ask_age, F.text.regexp(r"^(1[0-1][0-9]|[1-9]?[0-9])$"))
     async def create_profile_age(message: Message, state: FSMContext) -> None:
         await state.update_data(age=int(message.text))  # type: ignore[arg-type]
         await state.set_state(ProfileForm.ask_city)
@@ -140,8 +138,36 @@ def create_router(
             attributes=attrs,
             profile_number=None,
         )
+        # Отправим апдейт в основной бот, если настроен URL
+        settings = get_settings()
+        if settings.MAIN_BOT_PROFILE_UPSERT_URL and settings.MAIN_BOT_AUTH_TOKEN:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    await client.post(
+                        settings.MAIN_BOT_PROFILE_UPSERT_URL,
+                        headers={"Authorization": f"Bearer {settings.MAIN_BOT_AUTH_TOKEN}"},
+                        json={
+                            "user_id": user_id,
+                            "username": message.from_user.username if message.from_user else None,
+                            "gender": data.get("gender"),
+                            "bio": data.get("bio"),
+                            "attributes": attrs,
+                            "profile_number": None,
+                        },
+                    )
+            except Exception:
+                pass
+
+        preview = [
+            "Анкета сохранена:",
+            f"Пол: {'Мужчина' if data.get('gender')=='male' else 'Женщина'}",
+            f"О себе: {data.get('bio')}",
+            f"Возраст: {attrs.get('age')}",
+            f"Город: {attrs.get('city')}",
+            f"Хобби: {', '.join(attrs.get('hobbies') or [])}",
+        ]
+        await message.answer("\n".join(preview) + "\nИспользуйте /profile для просмотра или /my_matches для статуса совпадений.")
         await state.clear()
-        await message.answer("Анкета сохранена. Используйте /profile для просмотра.")
 
     @router.message(F.text == "/cancel")
     async def on_cancel(message: Message, state: FSMContext) -> None:
