@@ -82,6 +82,11 @@ def create_router(
             "/cancel — отменить заполнение анкеты"
         )
 
+    # Естественные фразы-триггеры на создание анкеты
+    @router.message(F.text.lower().contains("создать анкет") | F.text.lower().contains("завести анкет") | F.text.lower().contains("добавить анкет"))
+    async def create_profile_trigger(message: Message, state: FSMContext) -> None:
+        await create_profile_start(message, state)
+
     @router.message(F.text == "/create_profile")
     async def create_profile_start(message: Message, state: FSMContext) -> None:
         await state.clear()
@@ -161,6 +166,18 @@ def create_router(
             await message.answer("Активных совпадений пока нет.")
             return
         await message.answer("Статус: " + _format_match_context(latest))
+
+    @router.message(F.text == "/my_matches")
+    async def on_my_matches(message: Message) -> None:
+        user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
+        rows = await match_store.list_matches_for_user(user_id, only_mutual=True)
+        if not rows:
+            await message.answer("Взаимных совпадений пока нет.")
+            return
+        lines = ["Ваши взаимные совпадения:"]
+        for m in rows[:10]:
+            lines.append(_format_match_context(m))
+        await message.answer("\n".join(lines))
 
     @router.message(F.text == "/pay")
     async def on_pay(message: Message) -> None:

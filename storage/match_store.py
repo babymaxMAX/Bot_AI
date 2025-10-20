@@ -95,3 +95,31 @@ class MatchStore:
             "invoice_url",
         ]
         return {k: row[i] for i, k in enumerate(keys)}
+
+    async def list_matches_for_user(self, user_id: str, *, only_mutual: bool | None = None) -> list[dict[str, Any]]:
+        assert self._db is not None
+        if only_mutual is None:
+            query = (
+                "SELECT id, male_id, female_id, female_username, male_username, mutual, paid, invoice_url "
+                "FROM matches WHERE male_id = ? OR female_id = ? ORDER BY id DESC"
+            )
+            params = (user_id, user_id)
+        else:
+            query = (
+                "SELECT id, male_id, female_id, female_username, male_username, mutual, paid, invoice_url "
+                "FROM matches WHERE (male_id = ? OR female_id = ?) AND mutual = ? ORDER BY id DESC"
+            )
+            params = (user_id, user_id, 1 if only_mutual else 0)
+        cur = await self._db.execute(query, params)
+        rows = await cur.fetchall()
+        keys = [
+            "id",
+            "male_id",
+            "female_id",
+            "female_username",
+            "male_username",
+            "mutual",
+            "paid",
+            "invoice_url",
+        ]
+        return [{k: r[i] for i, k in enumerate(keys)} for r in rows]

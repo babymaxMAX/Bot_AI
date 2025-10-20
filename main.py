@@ -5,6 +5,7 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import get_settings, WEBHOOK
 from storage.dialogue_store import DialogueStore
@@ -46,7 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     rules = BusinessRules()
 
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
 
     # aiogram-обработчики (чат-логика)
     from routers.telegram import create_router
