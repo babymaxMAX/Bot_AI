@@ -95,6 +95,7 @@ def create_router(
         await message.answer(
             "Команды:\n"
             "/start — начать\n"
+            "/my_matches — список взаимных совпадений\n"
             "/create_profile — создать/обновить анкету\n"
             "/profile — показать мою анкету\n"
             "/match — статус моего матча\n"

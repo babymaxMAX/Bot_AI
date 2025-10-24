@@ -5,6 +5,7 @@ from aiogram.types import Update
 import asyncio
 
 from config import WEBHOOK, get_settings
+from storage.match_store import MatchStore
 
 telegram_router = APIRouter(prefix="/telegram", tags=["telegram"])
 
@@ -21,3 +22,11 @@ async def telegram_webhook(request: Request) -> Response:
     # мгновенный ответ 200 OK, обработка в фоне (устраняет таймауты Telegram)
     asyncio.create_task(request.app.state.dp.feed_update(bot=request.app.state.bot, update=update))
     return Response(status_code=200)
+
+
+# Deep-link support: start=match_<id> | start=profile_<number>
+@telegram_router.get("/deeplink")
+async def deeplink(match_id: int | None = None, profile_number: int | None = None) -> dict[str, str | int | None]:
+    # Placeholder endpoint to acknowledge deep-link handling contract
+    # Bot frontend (aiogram handlers) will actually parse /start param in updates
+    return {"match_id": match_id, "profile_number": profile_number}
