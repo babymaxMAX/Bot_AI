@@ -115,10 +115,16 @@ def create_router(
         await state.set_state(ProfileForm.ask_gender)
         await message.answer("Создадим анкету. Укажите ваш пол (male/female):")
 
-    @router.message(ProfileForm.ask_gender, F.text.lower().in_("male", "female", "мужчина", "женщина"))
+    @router.message(ProfileForm.ask_gender, F.text)
     async def create_profile_gender(message: Message, state: FSMContext) -> None:
         txt = (message.text or "").strip().lower()
-        gender = "male" if txt in {"male", "мужчина"} else "female"
+        if txt in {"male", "мужчина"}:
+            gender = "male"
+        elif txt in {"female", "женщина"}:
+            gender = "female"
+        else:
+            await message.answer("Укажите пол как 'male'/'мужчина' или 'female'/'женщина'.")
+            return
         await state.update_data(gender=gender)
         await state.set_state(ProfileForm.ask_bio)
         await message.answer("Коротко о себе (био):")
