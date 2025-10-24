@@ -65,6 +65,8 @@ class Settings(BaseSettings):
 
     # Auth от основного бота
     MAIN_BOT_AUTH_TOKEN: str | None = None
+    # URL вебхука основного бота для апсерта профиля (когда анкета создаётся в ИИ-боте)
+    MAIN_BOT_PROFILE_UPSERT_URL: str | None = None
 
 
 class WebhookConfig(BaseModel):
