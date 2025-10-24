@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.context import FSMContext
 import httpx
@@ -90,6 +90,28 @@ def create_router(
 ) -> Router:
     router = Router(name="chat")
 
+    def main_keyboard() -> ReplyKeyboardMarkup:
+        return ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="Мои совпадения")],
+                [KeyboardButton(text="Статус"), KeyboardButton(text="Оплатить"), KeyboardButton(text="Контакт")],
+                [KeyboardButton(text="Профиль"), KeyboardButton(text="Создать анкету")],
+            ],
+            resize_keyboard=True,
+            one_time_keyboard=False,
+        )
+
+    def resolve_user_role(profile: dict | None, latest_match: dict | None, user_id: str) -> str | None:
+        # Priority: explicit match binding → profile gender
+        if latest_match:
+            if str(latest_match.get("male_id")) == user_id:
+                return "male"
+            if str(latest_match.get("female_id")) == user_id:
+                return "female"
+        if profile and (g := (profile.get("gender") or "").lower()) in {"male", "female"}:
+            return g
+        return None
+
     @router.message(F.text == "/help")
     async def on_help(message: Message) -> None:
         await message.answer(
@@ -98,7 +120,7 @@ def create_router(
             "/my_matches — список взаимных совпадений\n"
             "/create_profile — создать/обновить анкету\n"
             "/profile — показать мою анкету\n"
-            "/match — статус моего матча\n"
+            "/status — статус взаимной симпатии\n"
             "/pay — получить ссылку на оплату (для мужчин при взаимной симпатии)\n"
             "/contact — получить контакт\n"
             "/cancel — отменить заполнение анкеты"
@@ -113,7 +135,11 @@ def create_router(
     async def create_profile_start(message: Message, state: FSMContext) -> None:
         await state.clear()
         await state.set_state(ProfileForm.ask_gender)
-        await message.answer("Создадим анкету. Укажите ваш пол (male/female):")
+        await message.answer("Создадим анкету. Укажите ваш пол (male/мужчина или female/женщина):", reply_markup=main_keyboard())
+
+    @router.message(F.text == "/start")
+    async def on_start_cmd(message: Message) -> None:
+        await message.answer("Готов помочь. Выберите действие на клавиатуре.", reply_markup=main_keyboard())
 
     @router.message(ProfileForm.ask_gender, F.text)
     async def create_profile_gender(message: Message, state: FSMContext) -> None:
@@ -374,14 +400,19 @@ def create_router(
         ctx = _format_profile_context(profile)
         await message.answer(f"Профиль:\n{ctx}")
 
-    @router.message(F.text == "/match")
-    async def on_match(message: Message) -> None:
+    @router.message(F.text == "/status")
+    async def on_status(message: Message) -> None:
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
         latest = await match_store.get_latest_match_for_user(user_id)
         if not latest:
-            await message.answer("Активных совпадений пока нет.")
+            await message.answer("Активных взаимных симпатий пока нет.")
             return
         await message.answer("Статус: " + _format_match_context(latest))
+
+    # alias для совместимости
+    @router.message(F.text == "/match")
+    async def on_match_alias(message: Message) -> None:
+        await on_status(message)
 
     @router.message(F.text == "/my_matches")
     async def on_my_matches(message: Message) -> None:
@@ -399,8 +430,13 @@ def create_router(
     async def on_pay(message: Message) -> None:
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
         latest = await match_store.get_latest_match_for_user(user_id)
+        profile = await profile_store.get_profile(user_id)
+        role = resolve_user_role(profile, latest, user_id)
         if not latest or latest["male_id"] != user_id or int(latest.get("mutual", 0)) != 1:
-            await message.answer("Пока нет активной взаимной симпатии, оплата не требуется.")
+            if role == "female":
+                await message.answer("Оплата не требуется. Вы можете начать диалог.")
+            else:
+                await message.answer("Пока нет активной взаимной симпатии, оплата не требуется.")
             return
         if int(latest.get("paid", 0)) == 1:
             await message.answer("Оплата уже подтверждена. Можете общаться свободно.")
@@ -428,17 +464,19 @@ def create_router(
     async def on_contact(message: Message) -> None:
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
         latest = await match_store.get_latest_match_for_user(user_id)
+        profile = await profile_store.get_profile(user_id)
+        role = resolve_user_role(profile, latest, user_id)
         if not latest or int(latest.get("mutual", 0)) != 1:
             await message.answer("Пока нет взаимной симпатии, контакт недоступен.")
             return
-        if latest.get("female_id") == user_id:
+        if role == "female" or latest.get("female_id") == user_id:
             male_username = latest.get("male_username")
             if male_username:
                 await message.answer(f"Аккаунт собеседника: @{male_username}")
             else:
                 await message.answer("Аккаунт собеседника пока недоступен. Попробуйте позже.")
             return
-        if latest.get("male_id") == user_id:
+        if role == "male" or latest.get("male_id") == user_id:
             if int(latest.get("paid", 0)) == 1:
                 female_username = latest.get("female_username")
                 if female_username:
@@ -454,7 +492,9 @@ def create_router(
         user_id = str(message.from_user.id) if message.from_user else str(message.chat.id)
 
         latest = await match_store.get_latest_match_for_user(user_id)
-        if latest and latest.get("male_id") == user_id and int(latest.get("mutual", 0)) == 1 and int(latest.get("paid", 0)) == 0:
+        profile = await profile_store.get_profile(user_id)
+        role = resolve_user_role(profile, latest, user_id)
+        if latest and role == "male" and int(latest.get("mutual", 0)) == 1 and int(latest.get("paid", 0)) == 0:
             invoice_url = latest.get("invoice_url")
             pay_hint = "Для доступа к странице собеседницы требуется оплата 1000₽."
             if invoice_url:
@@ -465,7 +505,6 @@ def create_router(
 
         await dialogue_store.add_message(user_id=user_id, role="user", content=message.text or "")
 
-        profile = await profile_store.get_profile(user_id)
         profile_ctx = _format_profile_context(profile) if profile else None
         match_ctx = _format_match_context(latest) if latest else None
         system_prompt = await rules.build_system_prompt(user_id=user_id, profile_context=profile_ctx, match_context=match_ctx)
